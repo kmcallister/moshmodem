@@ -150,51 +150,55 @@ async def main():
 def make_arg_parser():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--listen-host',
+    network = parser.add_argument_group('Network options')
+
+    network.add_argument('--listen-host',
         type    = str,
         metavar = 'ADDRESS',
         default = '127.0.0.1',
         help    = 'listen for Mosh client on this address')
 
-    parser.add_argument('--listen-port',
+    network.add_argument('--listen-port',
         type    = int,
         metavar = 'PORT',
         default = 1337,
         help    = 'listen for Mosh client on this port')
 
-    parser.add_argument('--connect-host',
+    network.add_argument('--connect-host',
         type    = str,
         metavar = 'ADDRESS',
         default = '127.0.0.1',
         help    = 'connect to Mosh server on this address')
 
-    parser.add_argument('--connect-port',
+    network.add_argument('--connect-port',
         type    = int,
         metavar = 'PORT',
         default = 60001,
         help    = 'connect to Mosh server on this port')
 
-    parser.add_argument('-d', '--hexdump',
+    output = parser.add_argument_group('Output formatting')
+
+    output.add_argument('-d', '--hexdump',
         default = False,
         action  = 'store_true',
         help    = 'print a full hexdump of each packet')
 
-    parser.add_argument('-p', '--parse',
+    output.add_argument('-p', '--parse',
         default = False,
         action  = 'store_true',
         help    = 'parse header fields before dumping (for unencrypted fork)')
 
-    parser.add_argument('-b', '--parse-protobufs',
+    output.add_argument('-b', '--parse-protobufs',
         default = False,
         action  = 'store_true',
         help    = 'parse protobufs too (requires protoc and Mosh source code)')
 
-    parser.add_argument('--mosh-source',
+    output.add_argument('--mosh-source',
         type    = str,
         default = '$MOSHMODEM_TOOLS_DIR/../../moshmodem-mosh',
         help    = 'path to Mosh source directory')
 
-    parser.add_argument('-c', '--color',
+    output.add_argument('-c', '--color',
         default = False,
         action  = 'store_true',
         help    = 'use colors in output')
