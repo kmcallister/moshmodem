@@ -3,12 +3,36 @@ import asyncio
 import argparse
 import datetime
 import struct
+import sh
+import ast
+from io import StringIO
+from os import path
 
 colors = {
     'client': '\x1B[1;32m',
     'server': '\x1B[1;36m',
     'reset':  '\x1B[0m',
 }
+
+def dump_protobuf(args, proto_type, proto_file, data, indent=8, slurp_diff=False):
+    mosh_source = args.mosh_source.replace('$MOSHMODEM_TOOLS_DIR',
+        path.dirname(path.realpath(__file__)))
+    protobufs_path = path.join(mosh_source, 'src/protobufs')
+    proto_file_path = path.join(protobufs_path, proto_file)
+
+    dump = sh.protoc('--proto_path', protobufs_path,
+              '--decode', proto_type,
+              proto_file_path,
+              _in=data)
+
+    ret = None
+    for ln in dump.splitlines():
+        if slurp_diff and ln.startswith('diff: '):
+            ret = ast.literal_eval(ln[6:])
+        else:
+            print(' '*indent + ln)
+
+    return ret
 
 def bytes_to_hex(data, sep):
     return sep.join('{:02X}'.format(x) for x in data)
@@ -41,9 +65,21 @@ def print_packet(args, sender, data):
             print('    Body:')
             data = data[idx:]
 
-        width = 16  # bytes
-        for i in range(0, len(data), width):
-            print('       ', bytes_to_hex(data[i:i+width], ' '))
+        if args.parse and args.parse_protobufs:
+            diff = dump_protobuf(args, 'TransportBuffers.Instruction',
+                          'transportinstruction.proto',
+                          data)
+            #print(repr(diff))
+            #if diff is not None:
+            #    proto_type, proto_file = ('ClientBuffers.UserMessage', 'userinput.proto') \
+            #        if sender == 'client' else ('HostBuffers.HostMessage', 'hostinput.proto')
+
+            #    dump_protobuf(args, proto_type, proto_file, diff, indent=12)
+
+        else:
+            width = 16  # bytes
+            for i in range(0, len(data), width):
+                print('       ', bytes_to_hex(data[i:i+width], ' '))
 
 class SharedData(object):
     def __init__(self, args):
@@ -147,6 +183,16 @@ def make_arg_parser():
         default = False,
         action  = 'store_true',
         help    = 'parse header fields before dumping (for unencrypted fork)')
+
+    parser.add_argument('-b', '--parse-protobufs',
+        default = False,
+        action  = 'store_true',
+        help    = 'parse protobufs too (requires protoc and Mosh source code)')
+
+    parser.add_argument('--mosh-source',
+        type    = str,
+        default = '$MOSHMODEM_TOOLS_DIR/../../moshmodem-mosh',
+        help    = 'path to Mosh source directory')
 
     parser.add_argument('-c', '--color',
         default = False,
