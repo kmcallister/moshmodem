@@ -211,6 +211,11 @@ def make_arg_parser():
 
     output = parser.add_argument_group('Output formatting')
 
+    output.add_argument('-c', '--color',
+        default = False,
+        action  = 'store_true',
+        help    = 'use colors in output')
+
     output.add_argument('-d', '--hexdump',
         default = False,
         action  = 'store_true',
@@ -230,11 +235,6 @@ def make_arg_parser():
         type    = str,
         default = '$MOSHMODEM_TOOLS_DIR/../../moshmodem-mosh',
         help    = 'path to Mosh source directory')
-
-    output.add_argument('-c', '--color',
-        default = False,
-        action  = 'store_true',
-        help    = 'use colors in output')
 
     interfere = parser.add_argument_group('Interfering with packets')
 
