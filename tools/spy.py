@@ -126,6 +126,8 @@ class Proxy(object):
             # Whoops! Butterfingers!
             if args.interfere_verbose:
                 print_with_color(args, 'drop', '    DROPPED this packet')
+            if args.blank_line:
+                print()
             return
 
         gaussian_lag = numpy.random.normal(args.lag_mean, args.lag_stddev)
@@ -139,6 +141,9 @@ class Proxy(object):
         lag = gaussian_lag + bitrate_lag
         if args.interfere_verbose and lag > 0.0:
             print_with_color(args, 'delay', '    DELAYED by %.4f sec' % (lag,))
+
+        if args.blank_line:
+            print()
 
         self.shared.loop.call_later(lag,
             lambda: transport.sendto(data, addr))
@@ -177,7 +182,15 @@ class ServerToClient(Proxy):
         self.interfere_and_send(ctos.transport, data, ctos.client_addr)
 
 async def main():
-    shared = SharedData(make_arg_parser().parse_args())
+    args = make_arg_parser().parse_args()
+    if args.verbose:
+        args.color             = True
+        args.blank_line        = True
+        args.packet_stats      = 1024
+        args.hexdump           = True
+        args.interfere_verbose = True
+
+    shared = SharedData(args)
 
     loop = asyncio.get_running_loop()
     ctos_future, stoc_future, on_con_lost = (loop.create_future() for _ in range(3))
@@ -225,10 +238,20 @@ def make_arg_parser():
 
     output = parser.add_argument_group('Output formatting')
 
+    output.add_argument('-v', '--verbose',
+        default = False,
+        action  = 'store_true',
+        help    = 'enable most of the output options')
+
     output.add_argument('-c', '--color',
         default = False,
         action  = 'store_true',
         help    = 'use colors in output')
+
+    output.add_argument('-k', '--blank-line',
+        default = False,
+        action  = 'store_true',
+        help    = 'print a blank line after each packet')
 
     output.add_argument('-s', '--packet-stats',
         default = 0,
