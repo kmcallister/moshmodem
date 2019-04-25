@@ -2,12 +2,16 @@
 import asyncio
 import argparse
 import datetime
+import struct
 
 colors = {
     'client': '\x1B[1;32m',
     'server': '\x1B[1;36m',
     'reset':  '\x1B[0m',
 }
+
+def bytes_to_hex(data, sep):
+    return sep.join('{:02X}'.format(x) for x in data)
 
 def print_packet(args, sender, data):
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -18,9 +22,21 @@ def print_packet(args, sender, data):
         print(colors['reset'], end='')
 
     if args.hexdump:
+        if args.parse:
+            print('    Nonce    |', bytes_to_hex(data[:8], ''))
+            print('    Tag      |', bytes_to_hex(data[8:24], ''))
+            print('    Times    | %5d / %5u' % struct.unpack('!HH', data[24:28]))
+            print('    Inst. ID | %d' % struct.unpack('!Q', data[28:36]))
+            frag_num = struct.unpack('!H', data[36:38])[0]
+            frag_final = bool(frag_num & 0x8000)
+            frag_num &= 0x7FFF
+            print('    Fragment | %d (%s)' % (frag_num, 'final' if frag_final else 'continued'))
+            print('    Body:')
+            data = data[38:]
+
         width = 16  # bytes
         for i in range(0, len(data), width):
-            print('    ', ' '.join('{:02X}'.format(x) for x in data[i:i+width]))
+            print('       ', bytes_to_hex(data[i:i+width], ' '))
 
 class SharedData(object):
     def __init__(self, args):
@@ -119,6 +135,11 @@ def make_arg_parser():
         default = False,
         action  = 'store_true',
         help    = 'print a full hexdump of each packet')
+
+    parser.add_argument('-p', '--parse',
+        default = False,
+        action  = 'store_true',
+        help    = 'parse header fields before dumping (for unencrypted fork)')
 
     parser.add_argument('-c', '--color',
         default = False,
