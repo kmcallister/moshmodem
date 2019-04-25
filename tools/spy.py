@@ -106,7 +106,11 @@ class Proxy(object):
         self.shared = shared
         self.packet_sizes = []
 
-    def interfere_and_send(self, transport, data, addr):
+    async def send(self, lag, transport, data, addr):
+        await asyncio.sleep(lag)
+        transport.sendto(data, addr)
+
+    def interfere_and_queue(self, transport, data, addr):
         args = self.shared.args
 
         if args.packet_stats > 0:
@@ -145,8 +149,7 @@ class Proxy(object):
         if args.blank_line:
             print()
 
-        self.shared.loop.call_later(lag,
-            lambda: transport.sendto(data, addr))
+        self.shared.loop.create_task(self.send(lag, transport, data, addr))
 
     def connection_lost(self, exc):
         self.shared.on_con_lost.set_result(True)
@@ -165,7 +168,7 @@ class ClientToServer(Proxy):
         self.client_addr = addr
         args = self.shared.args
         print_packet(self.shared.args, 'client', data)
-        self.interfere_and_send(self.shared.stoc.transport,
+        self.interfere_and_queue(self.shared.stoc.transport,
             data, (args.connect_host, args.connect_port))
 
 class ServerToClient(Proxy):
@@ -179,7 +182,7 @@ class ServerToClient(Proxy):
     def datagram_received(self, data, addr):
         print_packet(self.shared.args, 'server', data)
         ctos = self.shared.ctos
-        self.interfere_and_send(ctos.transport, data, ctos.client_addr)
+        self.interfere_and_queue(ctos.transport, data, ctos.client_addr)
 
 async def main():
     args = make_arg_parser().parse_args()
