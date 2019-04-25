@@ -191,7 +191,7 @@ def make_arg_parser():
     output.add_argument('-b', '--parse-protobufs',
         default = False,
         action  = 'store_true',
-        help    = 'parse protobufs too (requires protoc and Mosh source code)')
+        help    = 'parse protobufs too (BUGGY, requires protoc and Mosh source code)')
 
     output.add_argument('--mosh-source',
         type    = str,
