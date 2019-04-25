@@ -1,6 +1,26 @@
 #!/usr/bin/env python3.7
 import asyncio
 import argparse
+import datetime
+
+colors = {
+    'client': '\x1B[1;32m',
+    'server': '\x1B[1;36m',
+    'reset':  '\x1B[0m',
+}
+
+def print_packet(args, sender, data):
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    if args.color:
+        print(colors[sender], end='')
+    print('%s: %5d bytes from %-6s' % (timestamp, len(data), sender.upper()))
+    if args.color:
+        print(colors['reset'], end='')
+
+    if args.hexdump:
+        width = 16  # bytes
+        for i in range(0, len(data), width):
+            print('    ', ' '.join('{:02X}'.format(x) for x in data[i:i+width]))
 
 class SharedData(object):
     def __init__(self, args):
@@ -27,7 +47,7 @@ class ClientToServer(object):
 
     def datagram_received(self, data, addr):
         self.client_addr = addr
-        print('client -> server: %r' % (data,))
+        print_packet(self.shared.args, 'client', data)
         self.shared.stoc.transport.sendto(data,
             (self.shared.args.connect_host, self.shared.args.connect_port))
 
@@ -43,7 +63,7 @@ class ServerToClient(object):
         self.transport = transport
 
     def datagram_received(self, data, addr):
-        print('server -> client: %r' % (data,))
+        print_packet(self.shared.args, 'server', data)
         ctos = self.shared.ctos
         ctos.transport.sendto(data, ctos.client_addr)
 
@@ -94,6 +114,16 @@ def make_arg_parser():
         metavar = 'PORT',
         default = 60001,
         help    = 'connect to Mosh server on this port')
+
+    parser.add_argument('-d', '--hexdump',
+        default = False,
+        action  = 'store_true',
+        help    = 'print a full hexdump of each packet')
+
+    parser.add_argument('-c', '--color',
+        default = False,
+        action  = 'store_true',
+        help    = 'use colors in output')
 
     return parser
 
