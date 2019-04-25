@@ -208,7 +208,7 @@ async def main():
     await shared.on_con_lost
 
 def make_arg_parser():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Mosh man-in-the-middle tool.')
 
     network = parser.add_argument_group('Network options')
 
@@ -236,7 +236,7 @@ def make_arg_parser():
         default = 60001,
         help    = 'connect to Mosh server on this port')
 
-    output = parser.add_argument_group('Output formatting')
+    output = parser.add_argument_group('Output options')
 
     output.add_argument('-v', '--verbose',
         default = False,
@@ -256,7 +256,8 @@ def make_arg_parser():
     output.add_argument('-s', '--packet-stats',
         default = 0,
         type    = int,
-        help    = 'print stats about the last n packets in each direction')
+        metavar = 'N',
+        help    = 'print stats about the last N packets in each direction')
 
     output.add_argument('-d', '--hexdump',
         default = False,
@@ -266,16 +267,17 @@ def make_arg_parser():
     output.add_argument('-p', '--parse',
         default = False,
         action  = 'store_true',
-        help    = 'parse header fields before dumping (for unencrypted fork)')
+        help    = 'parse header fields before dumping (requires Mosh fork)')
 
-    output.add_argument('-b', '--parse-protobufs',
+    output.add_argument('--parse-protobufs',
         default = False,
         action  = 'store_true',
-        help    = 'parse protobufs too (BUGGY, requires protoc and Mosh source code)')
+        help    = 'parse protobufs too (BUGGY, requires protoc and Mosh fork with source code)')
 
     output.add_argument('--mosh-source',
         type    = str,
         default = '$MOSHMODEM_TOOLS_DIR/../../moshmodem-mosh',
+        metavar = 'DIR',
         help    = 'path to Mosh source directory')
 
     interfere = parser.add_argument_group('Interfering with packets')
@@ -288,21 +290,25 @@ def make_arg_parser():
     interfere.add_argument('--drop',
         default = 0.0,
         type    = float,
+        metavar = 'FRAC',
         help    = 'fraction of packets to randomly drop')
 
     interfere.add_argument('--lag-mean',
         default = 0.0,
         type    = float,
+        metavar = 'SEC',
         help    = 'mean induced packet lag (seconds)')
 
     interfere.add_argument('--lag-stddev',
         default = 0.0,
         type    = float,
+        metavar = 'SEC',
         help    = 'std. dev. of induced packet lag (seconds)')
 
     interfere.add_argument('--bitrate',
         default = None,
         type    = float,
+        metavar = 'BPS',
         help    = 'delay packets to simulate limited bitrate (bps)')
 
     return parser
