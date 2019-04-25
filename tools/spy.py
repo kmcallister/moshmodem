@@ -104,9 +104,23 @@ class SharedData(object):
 class Proxy(object):
     def __init__(self, shared):
         self.shared = shared
+        self.packet_sizes = []
 
     def interfere_and_send(self, transport, data, addr):
         args = self.shared.args
+
+        if args.packet_stats > 0:
+            self.packet_sizes.append(len(data))
+            self.packet_sizes = self.packet_sizes[-args.packet_stats:]
+
+            print('         |   min |   med |   max |      avg |      dev')
+            print('    -----+-------+-------+-------+----------+---------')
+            print('    size | %5d | %5d | %5d | %8.2f | %8.2f'
+                % (min(self.packet_sizes),
+                   numpy.median(self.packet_sizes),
+                   max(self.packet_sizes),
+                   numpy.mean(self.packet_sizes),
+                   numpy.std(self.packet_sizes)))
 
         if numpy.random.uniform() < args.drop:
             # Whoops! Butterfingers!
@@ -215,6 +229,11 @@ def make_arg_parser():
         default = False,
         action  = 'store_true',
         help    = 'use colors in output')
+
+    output.add_argument('-s', '--packet-stats',
+        default = 0,
+        type    = int,
+        help    = 'print stats about the last n packets in each direction')
 
     output.add_argument('-d', '--hexdump',
         default = False,
