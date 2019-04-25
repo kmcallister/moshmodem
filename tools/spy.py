@@ -114,9 +114,15 @@ class Proxy(object):
                 print_with_color(args, 'drop', '    DROPPED this packet')
             return
 
-        lag = numpy.random.normal(args.lag_mean, args.lag_stddev)
-        if lag < 0.0:
-            lag = 0.0
+        gaussian_lag = numpy.random.normal(args.lag_mean, args.lag_stddev)
+        if gaussian_lag < 0.0:
+            gaussian_lag = 0.0
+
+        bitrate_lag = 0.0
+        if args.bitrate is not None:
+            bitrate_lag = 8.0 * len(data) / args.bitrate
+
+        lag = gaussian_lag + bitrate_lag
         if args.interfere_verbose and lag > 0.0:
             print_with_color(args, 'delay', '    DELAYED by %.4f sec' % (lag,))
 
@@ -251,6 +257,11 @@ def make_arg_parser():
         default = 0.0,
         type    = float,
         help    = 'std. dev. of induced packet lag (seconds)')
+
+    interfere.add_argument('--bitrate',
+        default = None,
+        type    = float,
+        help    = 'delay packets to simulate limited bitrate (bps)')
 
     return parser
 
