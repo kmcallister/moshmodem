@@ -21,18 +21,25 @@ def print_packet(args, sender, data):
     if args.color:
         print(colors['reset'], end='')
 
+    idx = 0
+    def field(n):
+        nonlocal idx
+        x = data[idx:idx+n]
+        idx += n
+        return x
+
     if args.hexdump:
         if args.parse:
-            print('    Nonce    |', bytes_to_hex(data[:8], ''))
-            print('    Tag      |', bytes_to_hex(data[8:24], ''))
-            print('    Times    | %5d / %5u' % struct.unpack('!HH', data[24:28]))
-            print('    Inst. ID | %d' % struct.unpack('!Q', data[28:36]))
-            frag_num = struct.unpack('!H', data[36:38])[0]
+            print('    Nonce    |', bytes_to_hex(field(8), ''))
+            print('    Tag      |', bytes_to_hex(field(16), ''))
+            print('    Times    | %5d / %5u' % struct.unpack('!HH', field(4)))
+            print('    Inst. ID | %d' % struct.unpack('!Q', field(8)))
+            frag_num = struct.unpack('!H', field(2))[0]
             frag_final = bool(frag_num & 0x8000)
             frag_num &= 0x7FFF
             print('    Fragment | %d (%s)' % (frag_num, 'final' if frag_final else 'continued'))
             print('    Body:')
-            data = data[38:]
+            data = data[idx:]
 
         width = 16  # bytes
         for i in range(0, len(data), width):
