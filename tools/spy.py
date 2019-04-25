@@ -7,12 +7,22 @@ import sh
 import ast
 from io import StringIO
 from os import path
+import numpy.random
 
 colors = {
     'client': '\x1B[1;32m',
     'server': '\x1B[1;36m',
+    'drop':   '\x1B[1;31m',
+    'delay':  '\x1B[1;35m',
     'reset':  '\x1B[0m',
 }
+
+def print_with_color(cmdargs, color, *args, **kwargs):
+    if cmdargs.color:
+        print(colors[color], end='')
+    print(*args, **kwargs)
+    if cmdargs.color:
+        print(colors['reset'], end='')
 
 def dump_protobuf(args, proto_type, proto_file, data, indent=8, slurp_diff=False):
     mosh_source = args.mosh_source.replace('$MOSHMODEM_TOOLS_DIR',
@@ -39,11 +49,8 @@ def bytes_to_hex(data, sep):
 
 def print_packet(args, sender, data):
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    if args.color:
-        print(colors[sender], end='')
-    print('%s: %5d bytes from %-6s' % (timestamp, len(data), sender.upper()))
-    if args.color:
-        print(colors['reset'], end='')
+    print_with_color(args, sender,
+        '%s: %5d bytes from %-6s' % (timestamp, len(data), sender.upper()))
 
     idx = 0
     def field(n):
@@ -91,12 +98,37 @@ class SharedData(object):
         self.ctos = None
         self.stoc = None
 
-        loop = asyncio.get_running_loop()
-        self.on_con_lost = loop.create_future()
+        self.loop = asyncio.get_running_loop()
+        self.on_con_lost = self.loop.create_future()
 
-class ClientToServer(object):
+class Proxy(object):
     def __init__(self, shared):
         self.shared = shared
+
+    def interfere_and_send(self, transport, data, addr):
+        args = self.shared.args
+
+        if numpy.random.uniform() < args.drop:
+            # Whoops! Butterfingers!
+            if args.interfere_verbose:
+                print_with_color(args, 'drop', '    DROPPED this packet')
+            return
+
+        lag = numpy.random.normal(args.lag_mean, args.lag_stddev)
+        if lag < 0.0:
+            lag = 0.0
+        if args.interfere_verbose and lag > 0.0:
+            print_with_color(args, 'delay', '    DELAYED by %.4f sec' % (lag,))
+
+        self.shared.loop.call_later(lag,
+            lambda: transport.sendto(data, addr))
+
+    def connection_lost(self, exc):
+        self.shared.on_con_lost.set_result(True)
+
+class ClientToServer(Proxy):
+    def __init__(self, shared):
+        super().__init__(shared)
         shared.ctos = self
 
     def connection_made(self, transport):
@@ -106,16 +138,14 @@ class ClientToServer(object):
 
     def datagram_received(self, data, addr):
         self.client_addr = addr
+        args = self.shared.args
         print_packet(self.shared.args, 'client', data)
-        self.shared.stoc.transport.sendto(data,
-            (self.shared.args.connect_host, self.shared.args.connect_port))
+        self.interfere_and_send(self.shared.stoc.transport,
+            data, (args.connect_host, args.connect_port))
 
-    def connection_lost(self, exc):
-        self.shared.on_con_lost.set_result(True)
-
-class ServerToClient(object):
+class ServerToClient(Proxy):
     def __init__(self, shared):
-        self.shared = shared
+        super().__init__(shared)
         shared.stoc = self
 
     def connection_made(self, transport):
@@ -124,10 +154,7 @@ class ServerToClient(object):
     def datagram_received(self, data, addr):
         print_packet(self.shared.args, 'server', data)
         ctos = self.shared.ctos
-        ctos.transport.sendto(data, ctos.client_addr)
-
-    def connection_lost(self, exc):
-        self.shared.on_con_lost.set_result(True)
+        self.interfere_and_send(ctos.transport, data, ctos.client_addr)
 
 async def main():
     shared = SharedData(make_arg_parser().parse_args())
@@ -202,6 +229,28 @@ def make_arg_parser():
         default = False,
         action  = 'store_true',
         help    = 'use colors in output')
+
+    interfere = parser.add_argument_group('Interfering with packets')
+
+    interfere.add_argument('--interfere-verbose',
+        default = False,
+        action  = 'store_true',
+        help    = 'print a message when interfering with packets')
+
+    interfere.add_argument('--drop',
+        default = 0.0,
+        type    = float,
+        help    = 'fraction of packets to randomly drop')
+
+    interfere.add_argument('--lag-mean',
+        default = 0.0,
+        type    = float,
+        help    = 'mean induced packet lag (seconds)')
+
+    interfere.add_argument('--lag-stddev',
+        default = 0.0,
+        type    = float,
+        help    = 'std. dev. of induced packet lag (seconds)')
 
     return parser
 
