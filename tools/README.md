@@ -62,7 +62,7 @@ without restarting Mosh. Relive the glory days of the 9600 bps modem and marvel
 at the fact that Mosh still sort of works!
 
 ```
-$ ./spy.py --interfere-verbose --drop 0.25 --bitrate 9600
+$ ./spy.py --interfere-verbose --drop 0.25 --bitrate 9600 --max-in-flight 1
 Listening for client on 127.0.0.1 port 1337
 
 2019-04-25 12:55:15:    62 bytes from CLIENT

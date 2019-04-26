@@ -100,13 +100,21 @@ class SharedData(object):
 
         self.loop = asyncio.get_running_loop()
         self.on_con_lost = self.loop.create_future()
-        if args.half_duplex:
-            self.packet_lock = asyncio.Lock()
+        if args.max_in_flight is not None and args.half_duplex:
+            self.packet_sem = asyncio.Semaphore(value=args.max_in_flight)
 
 class Proxy(object):
     def __init__(self, shared):
         self.shared = shared
         self.packet_sizes = []
+        args = self.shared.args
+        if args.max_in_flight is None:
+            self.packet_sem = None
+        else:
+            if args.half_duplex:
+                self.packet_sem = self.shared.packet_sem
+            else:
+                self.packet_sem = asyncio.Semaphore(value=args.max_in_flight)
 
     async def send_inner(self, lag, transport, data, addr):
         await asyncio.sleep(lag)
@@ -115,11 +123,11 @@ class Proxy(object):
             transport.sendto(data, addr)
 
     async def send(self, *args, **kwargs):
-        if self.shared.args.half_duplex:
-            async with self.shared.packet_lock:
-                await self.send_inner(*args, **kwargs)
-        else:
+        if self.packet_sem is None:
             await self.send_inner(*args, **kwargs)
+        else:
+            async with self.packet_sem:
+                await self.send_inner(*args, **kwargs)
 
     def interfere_and_queue(self, transport, data, addr):
         args = self.shared.args
@@ -327,10 +335,16 @@ def make_arg_parser():
         metavar = 'BPS',
         help    = 'delay packets to simulate limited bitrate (bps)')
 
+    interfere.add_argument('--max-in-flight',
+        default = None,
+        type    = int,
+        metavar = 'N',
+        help    = 'allow at most N packets in flight at once, per direction')
+
     interfere.add_argument('--half-duplex',
         default = False,
         action  = 'store_true',
-        help    = 'allow only one packet in flight at a time')
+        help    = 'interpret --max-in-flight as a total for both directions')
 
     return parser
 
