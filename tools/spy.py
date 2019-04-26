@@ -100,15 +100,26 @@ class SharedData(object):
 
         self.loop = asyncio.get_running_loop()
         self.on_con_lost = self.loop.create_future()
+        if args.half_duplex:
+            self.packet_lock = asyncio.Lock()
 
 class Proxy(object):
     def __init__(self, shared):
         self.shared = shared
         self.packet_sizes = []
 
-    async def send(self, lag, transport, data, addr):
+    async def send_inner(self, lag, transport, data, addr):
         await asyncio.sleep(lag)
-        transport.sendto(data, addr)
+        # Send the packet unless it was dropped.
+        if data is not None:
+            transport.sendto(data, addr)
+
+    async def send(self, *args, **kwargs):
+        if self.shared.args.half_duplex:
+            async with self.shared.packet_lock:
+                await self.send_inner(*args, **kwargs)
+        else:
+            await self.send_inner(*args, **kwargs)
 
     def interfere_and_queue(self, transport, data, addr):
         args = self.shared.args
@@ -126,14 +137,6 @@ class Proxy(object):
                    numpy.mean(self.packet_sizes),
                    numpy.std(self.packet_sizes)))
 
-        if numpy.random.uniform() < args.drop:
-            # Whoops! Butterfingers!
-            if args.interfere_verbose:
-                print_with_color(args, 'drop', '    DROPPED this packet')
-            if args.blank_line:
-                print()
-            return
-
         gaussian_lag = numpy.random.normal(args.lag_mean, args.lag_stddev)
         if gaussian_lag < 0.0:
             gaussian_lag = 0.0
@@ -145,6 +148,16 @@ class Proxy(object):
         lag = gaussian_lag + bitrate_lag
         if args.interfere_verbose and lag > 0.0:
             print_with_color(args, 'delay', '    DELAYED by %.4f sec' % (lag,))
+
+        if numpy.random.uniform() < args.drop:
+            # Whoops! Butterfingers!
+            #
+            # Dropped packets go through the normal codepath up until
+            # sendto(). This ensures they consume the same resources
+            # as packets which make it all the way.
+            if args.interfere_verbose:
+                print_with_color(args, 'drop', '    DROPPED this packet')
+            data = None
 
         if args.blank_line:
             print()
@@ -313,6 +326,11 @@ def make_arg_parser():
         type    = float,
         metavar = 'BPS',
         help    = 'delay packets to simulate limited bitrate (bps)')
+
+    interfere.add_argument('--half-duplex',
+        default = False,
+        action  = 'store_true',
+        help    = 'allow only one packet in flight at a time')
 
     return parser
 
